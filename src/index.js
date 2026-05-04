@@ -104,41 +104,85 @@ app.get('/status', (req, res) => {
 
 // QR Code (público — necessário para escanear)
 app.get('/qr', (req, res) => {
-    if (isConnected) {
-        return res.json({ message: 'WhatsApp já está conectado. Nenhum QR necessário.' });
-    }
-    if (!qrBase64) {
-        return res.json({ message: 'QR Code ainda não gerado. Aguarde alguns segundos e tente novamente.' });
-    }
-    // Retorna HTML com o QR code para fácil escaneamento
-    res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Printable WhatsApp QR Code</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-                body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f0f0f0; }
-                .card { background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; }
-                img { width: 280px; height: 280px; }
-                h1 { color: #128C7E; }
-                p { color: #666; }
-                .refresh { margin-top: 1rem; padding: 0.5rem 1.5rem; background: #128C7E; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 1rem; }
-            </style>
-        </head>
-        <body>
-            <div class="card">
-                <h1>🔗 Printable WhatsApp</h1>
-                <p>Escanei o QR Code com o WhatsApp do seu telemóvel</p>
-                <img src="${qrBase64}" alt="QR Code" />
-                <br/>
-                <button class="refresh" onclick="location.reload()">🔄 Atualizar QR</button>
-                <p style="font-size:0.8rem; margin-top:1rem;">O QR Code expira em ~60 segundos. Clique em Atualizar se expirar.</p>
-            </div>
-        </body>
-        </html>
-    `);
-});
+        if (isConnected) {
+            return res.send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Printable WhatsApp - Conectado</title>
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
+                    <style>
+                        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #e7f3ef; }
+                        .card { background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; border-top: 5px solid #128C7E; }
+                        .icon { font-size: 4rem; color: #128C7E; margin-bottom: 1rem; }
+                        h1 { color: #128C7E; margin: 0; }
+                        p { color: #666; margin-top: 1rem; }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <div class="icon">✅</div>
+                        <h1>WhatsApp Conectado!</h1>
+                        <p>O seu servidor está pronto para enviar mensagens.</p>
+                        <p style="font-size: 0.9rem; color: #999;">Pode fechar esta janela agora.</p>
+                    </div>
+                </body>
+                </html>
+            `);
+        }
+        if (!qrBase64) {
+            return res.send(`
+                <!DOCTYPE html>
+                <html>
+                <head><meta http-equiv="refresh" content="3"><title>Carregando...</title></head>
+                <body style="font-family:sans-serif; text-align:center; padding-top:20%;">
+                    <h2>A gerar QR Code...</h2>
+                    <p>Aguarde um momento.</p>
+                </body>
+                </html>
+            `);
+        }
+        // Retorna HTML com o QR code para fácil escaneamento
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Printable WhatsApp QR Code</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f0f0f0; }
+                    .card { background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; }
+                    img { width: 280px; height: 280px; border: 1px solid #ddd; padding: 10px; border-radius: 10px; }
+                    h1 { color: #128C7E; }
+                    p { color: #666; }
+                    .status-dot { height: 10px; width: 10px; background-color: #ffcc00; border-radius: 50%; display: inline-block; margin-right: 5px; }
+                </style>
+                <script>
+                    // Verificar status a cada 3 segundos
+                    setInterval(async () => {
+                        try {
+                            const res = await fetch('/status');
+                            const data = await res.json();
+                            if (data.connected) {
+                                location.reload(); // Vai cair no bloco 'isConnected' acima
+                            }
+                        } catch (e) {}
+                    }, 3000);
+                </script>
+            </head>
+            <body>
+                <div class="card">
+                    <h1>🔗 Conectar WhatsApp</h1>
+                    <p><span class="status-dot"></span> Aguardando escaneamento...</p>
+                    <img src="${qrBase64}" alt="QR Code" />
+                    <p style="font-size:0.85rem; color:#888; margin-top:1.5rem;">
+                        Abra o WhatsApp no telemóvel > Dispositivos Vinculados > Conectar um dispositivo.
+                    </p>
+                </div>
+            </body>
+            </html>
+        `);
+    });
 
 // Enviar mensagem de texto (protegido por API Key)
 app.post('/send-text', requireApiKey, async (req, res) => {
