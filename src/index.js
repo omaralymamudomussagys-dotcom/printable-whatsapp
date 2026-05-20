@@ -238,6 +238,29 @@ app.get('/instance/connectionState/:instance', requireApiKey, (req, res) => {
     });
 });
 
+// 2b. Buscar instâncias (alguns sistemas pedem isso antes de conectar)
+app.get('/instance/fetchInstances', requireApiKey, (req, res) => {
+    return res.json([
+        {
+            instance: {
+                instanceName: 'KAIZEN E PRINTABLE ATUALIZAÇÕES',
+                state: isConnected ? 'open' : (connectionStatus === 'qr_ready' ? 'connecting' : connectionStatus)
+            }
+        }
+    ]);
+});
+
+// 2c. Criar instância (mock)
+app.post('/instance/create', requireApiKey, (req, res) => {
+    return res.json({
+        instance: {
+            instanceName: req.body.instanceName || 'Printable',
+            status: 'created'
+        },
+        hash: { apikey: API_KEY }
+    });
+});
+
 // 3. Enviar Texto
 app.post('/message/sendText/:instance', requireApiKey, async (req, res) => {
     // Nexboard pode enviar como { number, text } ou as vezes variations
@@ -303,6 +326,16 @@ app.post('/message/sendMedia/:instance', requireApiKey, async (req, res) => {
 // Health check simples (para o Railway saber que está vivo)
 app.get('/', (req, res) => {
     res.json({ service: 'Printable WhatsApp Server', version: '1.0.0', status: connectionStatus });
+});
+
+// Handler para evitar que erros 404 retornem HTML (causando o erro '<!doctype' no Nexboard)
+app.use((req, res, next) => {
+    console.log(`[404] Nexboard tentou acessar: ${req.method} ${req.url}`);
+    res.status(404).json({
+        status: 404,
+        error: "Not Found",
+        message: `Endpoint ${req.method} ${req.url} não implementado no servidor fake Evolution API.`
+    });
 });
 
 // ─── Iniciar servidor ─────────────────────────────────────────────────────────
