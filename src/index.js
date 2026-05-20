@@ -25,9 +25,10 @@ let connectionStatus = 'disconnected'; // 'disconnected' | 'connecting' | 'conne
 
 // ─── Middleware de autenticação ───────────────────────────────────────────────
 function requireApiKey(req, res, next) {
-    const key = req.headers['x-api-key'];
+    // Nexboard e Evolution API usam o header 'apikey', mas suportamos 'x-api-key' também
+    const key = req.headers['x-api-key'] || req.headers['apikey'];
     if (!key || key !== API_KEY) {
-        return res.status(401).json({ error: 'Unauthorized. Missing or invalid X-Api-Key header.' });
+        return res.status(401).json({ error: 'Unauthorized. Missing or invalid API Key.' });
     }
     next();
 }
@@ -205,6 +206,94 @@ app.post('/send-text', requireApiKey, async (req, res) => {
         res.json({ success: true, messageId: result?.key?.id });
     } catch (error) {
         console.error(`[Baileys] ❌ Erro ao enviar para ${phone}:`, error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ─── Endpoints Compatíveis com Evolution API (Para a Nexboard) ───────────────
+
+// 1. Gerar/Obter QR Code
+app.get('/instance/connect/:instance', requireApiKey, (req, res) => {
+    if (isConnected) {
+        return res.json({ instance: { instanceName: req.params.instance, state: 'open' } });
+    }
+    if (qrBase64) {
+        return res.json({ 
+            instance: { instanceName: req.params.instance, state: 'connecting' }, 
+            base64: qrBase64 
+        });
+    }
+    return res.json({ instance: { instanceName: req.params.instance, state: 'connecting' } });
+});
+
+// 2. Obter Estado da Conexão
+app.get('/instance/connectionState/:instance', requireApiKey, (req, res) => {
+    return res.json({
+        instance: {
+            instanceName: req.params.instance,
+            state: isConnected ? 'open' : (connectionStatus === 'qr_ready' ? 'connecting' : connectionStatus)
+        }
+    });
+});
+
+// 3. Enviar Texto
+app.post('/message/sendText/:instance', requireApiKey, async (req, res) => {
+    // Nexboard pode enviar como { number, text } ou as vezes variations
+    const { number, text } = req.body;
+    const phone = number || req.body.phone;
+    if (!phone || !text) return res.status(400).json({ error: 'Campos obrigatórios: number, text' });
+    if (!isConnected || !sock) return res.status(503).json({ error: 'WhatsApp não está conectado.' });
+
+    try {
+        const jid = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`;
+        const result = await sock.sendMessage(jid, { text });
+        console.log(`[Evolution API] ✅ Texto enviado para ${phone}`);
+        res.json({ key: result?.key });
+    } catch (error) {
+        console.error(`[Evolution API] ❌ Erro ao enviar texto para ${phone}:`, error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 4. Enviar Media/Documento (PDF da fatura)
+app.post('/message/sendMedia/:instance', requireApiKey, async (req, res) => {
+    const { number, mediatype, mimetype, media, fileName, caption } = req.body;
+    const phone = number || req.body.phone;
+    if (!phone || !media) return res.status(400).json({ error: 'Campos obrigatórios: number, media' });
+    if (!isConnected || !sock) return res.status(503).json({ error: 'WhatsApp não está conectado.' });
+
+    try {
+        const jid = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`;
+        
+        let mediaContent;
+        if (media.startsWith('http')) {
+            mediaContent = { url: media };
+        } else {
+            const base64Data = media.includes('base64,') ? media.split('base64,')[1] : media;
+            mediaContent = Buffer.from(base64Data, 'base64');
+        }
+
+        const messageOptions = {};
+        if (mediatype === 'document' || (mimetype && mimetype.includes('pdf'))) {
+            messageOptions.document = mediaContent;
+            messageOptions.mimetype = mimetype || 'application/pdf';
+            if (fileName) messageOptions.fileName = fileName;
+            if (caption) messageOptions.caption = caption;
+        } else if (mediatype === 'image') {
+            messageOptions.image = mediaContent;
+            if (caption) messageOptions.caption = caption;
+        } else {
+            messageOptions.document = mediaContent;
+            messageOptions.mimetype = mimetype || 'application/octet-stream';
+            if (fileName) messageOptions.fileName = fileName;
+            if (caption) messageOptions.caption = caption;
+        }
+
+        const result = await sock.sendMessage(jid, messageOptions);
+        console.log(`[Evolution API] ✅ Mídia enviada para ${phone}`);
+        res.json({ key: result?.key });
+    } catch (error) {
+        console.error(`[Evolution API] ❌ Erro ao enviar mídia para ${phone}:`, error.message);
         res.status(500).json({ error: error.message });
     }
 });
