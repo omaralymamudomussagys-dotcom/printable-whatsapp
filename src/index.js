@@ -215,7 +215,7 @@ app.post('/send-text', requireApiKey, async (req, res) => {
 // ─── Endpoints Compatíveis com Evolution API (Para a Nexboard) ───────────────
 
 // 1. Gerar/Obter QR Code
-app.get('/instance/connect/:instance', requireApiKey, (req, res) => {
+app.all('/instance/connect/:instance', requireApiKey, (req, res) => {
     if (isConnected) {
         return res.json({ instance: { instanceName: req.params.instance, state: 'open' } });
     }
@@ -229,7 +229,7 @@ app.get('/instance/connect/:instance', requireApiKey, (req, res) => {
 });
 
 // 2. Obter Estado da Conexão
-app.get('/instance/connectionState/:instance', requireApiKey, (req, res) => {
+app.all('/instance/connectionState/:instance', requireApiKey, (req, res) => {
     return res.json({
         instance: {
             instanceName: req.params.instance,
@@ -239,7 +239,7 @@ app.get('/instance/connectionState/:instance', requireApiKey, (req, res) => {
 });
 
 // 2b. Buscar instâncias (alguns sistemas pedem isso antes de conectar)
-app.get('/instance/fetchInstances', requireApiKey, (req, res) => {
+app.all('/instance/fetchInstances', requireApiKey, (req, res) => {
     return res.json([
         {
             instance: {
@@ -251,7 +251,7 @@ app.get('/instance/fetchInstances', requireApiKey, (req, res) => {
 });
 
 // 2c. Criar instância (mock)
-app.post('/instance/create', requireApiKey, (req, res) => {
+app.all('/instance/create', requireApiKey, (req, res) => {
     return res.json({
         instance: {
             instanceName: req.body.instanceName || 'Printable',
@@ -262,7 +262,7 @@ app.post('/instance/create', requireApiKey, (req, res) => {
 });
 
 // 3. Enviar Texto
-app.post('/message/sendText/:instance', requireApiKey, async (req, res) => {
+app.all('/message/sendText/:instance', requireApiKey, async (req, res) => {
     // Nexboard pode enviar como { number, text } ou as vezes variations
     const { number, text } = req.body;
     const phone = number || req.body.phone;
@@ -281,7 +281,7 @@ app.post('/message/sendText/:instance', requireApiKey, async (req, res) => {
 });
 
 // 4. Enviar Media/Documento (PDF da fatura)
-app.post('/message/sendMedia/:instance', requireApiKey, async (req, res) => {
+app.all('/message/sendMedia/:instance', requireApiKey, async (req, res) => {
     const { number, mediatype, mimetype, media, fileName, caption } = req.body;
     const phone = number || req.body.phone;
     if (!phone || !media) return res.status(400).json({ error: 'Campos obrigatórios: number, media' });
