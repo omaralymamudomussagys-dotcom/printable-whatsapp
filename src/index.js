@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import makeWASocket, {
     DisconnectReason,
     useMultiFileAuthState,
@@ -10,6 +11,7 @@ import pino from 'pino';
 import QRCode from 'qrcode';
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 // ─── Config ──────────────────────────────────────────────────────────────────
