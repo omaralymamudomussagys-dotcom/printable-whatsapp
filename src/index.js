@@ -24,6 +24,7 @@ let sock = null;
 let qrBase64 = null;
 let isConnected = false;
 let connectionStatus = 'disconnected'; // 'disconnected' | 'connecting' | 'connected'
+let dynamicWebhooks = {}; // Armazena { instanceName: webhookUrl } dinamicamente
 
 // ─── Middleware de autenticação ───────────────────────────────────────────────
 function requireApiKey(req, res, next) {
@@ -50,7 +51,7 @@ async function connectWhatsApp() {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, logger),
         },
-        printQRInTerminal: true,
+
         browser: ['Printable Server', 'Chrome', '120.0'],
         generateHighQualityLinkPreview: false,
     });
@@ -90,6 +91,60 @@ async function connectWhatsApp() {
             connectionStatus = 'connected';
             qrBase64 = null;
             console.log('[Baileys] ✅ WhatsApp conectado com sucesso!');
+        }
+    });
+
+    // Escutar mensagens recebidas (Webhook)
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type !== 'notify') return;
+        
+        const msg = messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+
+        // Extrair texto da mensagem (suporta texto simples e texto estendido/respostas)
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+        
+        // Verificar se a mensagem começa por !venda (case insensitive)
+        if (!text.toLowerCase().startsWith('!venda')) return;
+
+        const instancesToNotify = Object.keys(dynamicWebhooks);
+        
+        // Fallback: se não existir nenhuma instância em memória mas existir no .env
+        if (instancesToNotify.length === 0 && process.env.WEBHOOK_URL) {
+            const fallbackInstance = process.env.INSTANCE_NAME || 'Printable';
+            dynamicWebhooks[fallbackInstance] = process.env.WEBHOOK_URL;
+            instancesToNotify.push(fallbackInstance);
+        }
+
+        for (const instanceName of instancesToNotify) {
+            const webhookUrl = dynamicWebhooks[instanceName];
+            if (!webhookUrl) continue;
+
+            const payload = {
+                event: 'messages.upsert',
+                instance: instanceName,
+                data: {
+                    key: msg.key,
+                    pushName: msg.pushName || 'Desconhecido',
+                    message: msg.message,
+                    messageTimestamp: msg.messageTimestamp
+                }
+            };
+
+            try {
+                // Usando fetch nativo (Node >= 18)
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': process.env.WHATSAPP_API_KEY || 'printable-wa-secret'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                console.log(`[Webhook] ✅ Webhook enviado para instância '${instanceName}' (${webhookUrl}). Status: ${response.status}`);
+            } catch (error) {
+                console.error(`[Webhook] ❌ Erro ao enviar webhook para '${instanceName}':`, error.message);
+            }
         }
     });
 }
@@ -250,15 +305,36 @@ app.all('/instance/fetchInstances', requireApiKey, (req, res) => {
     ]);
 });
 
-// 2c. Criar instância (mock)
+// 2c. Criar instância (mock dinâmico)
 app.all('/instance/create', requireApiKey, (req, res) => {
+    const instanceName = req.body.instanceName || req.query.instanceName || 'Printable';
+    const webhook = req.body.webhook || req.body.webhookUrl;
+
+    if (webhook) {
+        dynamicWebhooks[instanceName] = webhook;
+        console.log(`[Evolution API] Webhook configurado dinamicamente para a instância '${instanceName}': ${webhook}`);
+    }
+
     return res.json({
         instance: {
-            instanceName: req.body.instanceName || 'Printable',
+            instanceName: instanceName,
             status: 'created'
         },
         hash: { apikey: API_KEY }
     });
+});
+
+// Endpoint adicional para setar webhook separadamente, caso a Nexboard use
+app.all('/webhook/set/:instance', requireApiKey, (req, res) => {
+    const instanceName = req.params.instance;
+    const webhook = req.body.url || req.body.webhook || req.body.webhookUrl;
+    
+    if (webhook) {
+        dynamicWebhooks[instanceName] = webhook;
+        console.log(`[Evolution API] Webhook atualizado via /webhook/set para a instância '${instanceName}': ${webhook}`);
+    }
+    
+    return res.json({ status: 'SUCCESS', webhook });
 });
 
 // 3. Enviar Texto
