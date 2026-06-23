@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  whatsapp-server:
+    build: .
+    container_name: printable-whatsapp
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - WHATSAPP_API_KEY=printable-wa-secret
+      - INSTANCE_NAME=Printable
+    volumes:
+      - ./sessions:/app/sessions
