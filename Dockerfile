@@ -17,8 +17,6 @@ COPY . .
 # Expor a porta
 EXPOSE 3000
 
-# Criar o volume para as sessões, assim os dados de login não se perdem
-VOLUME ["/app/sessions"]
 
 # Comando de arranque
 CMD ["npm", "start"]
