@@ -288,16 +288,16 @@ app.post('/send-text', requireApiKey, async (req, res) => {
 
     const instanceData = instances.get(instanceName);
     if (!instanceData || !instanceData.isConnected || !instanceData.sock) {
-        return res.status(503).json({ error: \`Instância '\${instanceName}' não conectada. Verifique /status.\` });
+        return res.status(503).json({ error: `Instância '${instanceName}' não conectada. Verifique /status.` });
     }
 
     try {
-        const jid = phone.includes('@') ? phone : \`\${phone}@s.whatsapp.net\`;
+        const jid = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`;
         const result = await instanceData.sock.sendMessage(jid, { text: message });
-        console.log(\`[Baileys][\${instanceName}] ✅ Mensagem enviada para \${phone}\`);
+        console.log(`[Baileys][${instanceName}] ✅ Mensagem enviada para ${phone}`);
         res.json({ success: true, messageId: result?.key?.id });
     } catch (error) {
-        console.error(\`[Baileys][\${instanceName}] ❌ Erro ao enviar para \${phone}:\`, error.message);
+        console.error(`[Baileys][${instanceName}] ❌ Erro ao enviar para ${phone}:`, error.message);
         res.status(500).json({ error: error.message });
     }
 });
